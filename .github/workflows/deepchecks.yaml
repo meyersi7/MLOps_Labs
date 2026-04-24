@@ -31,3 +31,9 @@ jobs:
           python data.py
           python train.py
           python test.py
+
+      - name: Bericht speichern
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepchecks-html-report
+          path: lab04/deepchecks_intro/report.html
