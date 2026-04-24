@@ -22,7 +22,7 @@ jobs:
       - name: Bibliotheken installieren
         run: |
           pip install --upgrade pip
-          pip install deepchecks pandas scikit-learn torch torchvision albumentations
+          pip install deepchecks pandas scikit-learn torch torchvision albumentations pytorch-ignite
 
       - name: Pipeline ausführen
         run: |
