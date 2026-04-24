@@ -1,0 +1,32 @@
+name: Deepchecks ML Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v4
+
+      - name: Python installieren
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Bibliotheken installieren
+        run: |
+          pip install --upgrade pip
+          pip install deepchecks pandas scikit-learn
+
+      - name: Pipeline ausführen
+        run: |
+          cd lab04/deepchecks_intro
+          python data.py
+          python train.py
+          python test.py
