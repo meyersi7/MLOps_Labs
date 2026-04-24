@@ -14,6 +14,8 @@ import os
 from check_attack_solution import FGSMAttackCheck
 from data import AntsBeesDataset
 
+from check_attack import FGSMAttackCheck
+
 
 def build_collate_fn(model, device) -> callable:
     def _collate_fn(batch) -> BatchOutputFormat:

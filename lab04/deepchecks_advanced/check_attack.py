@@ -4,6 +4,7 @@ from deepchecks.vision.context import Context
 import plotly.express as px
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 from typing import Any
 
@@ -11,62 +12,75 @@ from typing import Any
 class FGSMAttackCheck(SingleDatasetCheck):
     """A check to test if the model is robust to FGSM attacks."""
 
-    # TODO: Add epsilon and model as a parameter.
     def __init__(
         self, device: str = "cpu", epsilon: float = 1e-4, model=None, **kwargs
     ):
         super().__init__(**kwargs)
         self.device = device
+        self.epsilon = epsilon
+        self.model = model # Speichert das Modell für den Angriff
 
-    # You can ignore the following method, we don't need it for this check, except to initialize the cache.
     def initialize_run(self, context: Context, dataset_kind: DatasetKind):
-        # Initialize cache. You can use a different data structure if you want.
-        self.cache = {}
+        # Initialisiert die Zähler im Cache
+        self.cache = {"failing_samples": 0, "total_samples": 0}
 
     def update(self, context: Context, batch: Any, dataset_kind: DatasetKind):
         model = self.model
+        model.to(self.device)
+        model.eval() # Modell in den Evaluationsmodus versetzen
 
-        batch = zip(batch.original_images, batch.original_labels)
-        for sample in batch:
-            x, y = sample
-            x = torch.tensor(x, dtype=torch.float32).to(self.device)
+        # Wir iterieren durch die Bilder im Batch
+        batch_data = zip(batch.original_images, batch.original_labels)
+        for sample in batch_data:
+            x_raw, y_raw = sample
+            
+            # Daten vorbereiten und Gradienten-Tracking aktivieren
+            x = torch.tensor(x_raw, dtype=torch.float32).to(self.device).permute(2, 0, 1).reshape(1, 3, 224, 224)
             x.requires_grad = True
-            y = torch.tensor(y, dtype=torch.float32).to(self.device)
-            y = y.reshape(1)
+            y = torch.tensor(y_raw, dtype=torch.long).to(self.device).reshape(1)
 
-            x = x.permute(2, 0, 1)
-            x = x.reshape(1, 3, 224, 224)
-
+            # Vorhersage für das Originalbild
             logits = model(x)
-            y_hat = F.softmax(logits, dim=1)
-
-            loss = F.nll_loss(y_hat, y)
+            loss = F.cross_entropy(logits, y)
+            
+            # Gradienten berechnen
             model.zero_grad()
-            loss.backward(inputs=[x])
+            loss.backward()
 
-            # TODO: Perform the FGSM attack and check if the model is fooled.
-            y_tilde = ...
+            # FGSM Angriff durchführen
+            x_perturbed = self.fgsm_attack(x, self.epsilon)
 
-            if y_tilde != y.int():
-                self.cache["failing_samples"] = self.cache.get("failing_samples", 0) + 1
-            self.cache["total_samples"] = self.cache.get("total_samples", 0) + 1
+            # Vorhersage für das manipulierte Bild
+            output_perturbed = model(x_perturbed)
+            y_tilde = output_perturbed.argmax(dim=1)
+
+            # Prüfen, ob die KI getäuscht wurde
+            if y_tilde != y:
+                self.cache["failing_samples"] += 1
+            self.cache["total_samples"] += 1
 
     def compute(self, context: Context, dataset_kind: DatasetKind) -> CheckResult:
-        # TODO: Get the results from the cache and compute the ratio of failing samples.
-        result = {"ratio": ...}
+        # Ergebnisse aus dem Cache abrufen
+        failing = self.cache.get("failing_samples", 0)
+        total = self.cache.get("total_samples", 0)
+        
+        # Ratio berechnen (Erfolgsquote des Angriffs)
+        ratio = failing / total if total > 0 else 0
+        result = {"ratio": ratio}
 
-        # TODO: Create a plotly express figure to display the ratio of failing samples.
-        # (yes, you have my permission create a pie chart: https://plotly.com/python/pie-charts/)
-        sizes = [result["ratio"], 1 - result["ratio"]]
-        labels = ["Failing", "Not failing"]
-        fig = px.pie(values=sizes, names=labels, title="Ratio of failing samples")
+        # Pie Chart erstellen
+        sizes = [ratio, 1 - ratio]
+        labels = ["Failing (Fooled)", "Not failing (Robust)"]
+        fig = px.pie(values=sizes, names=labels, title="Ratio of failing samples under FGSM Attack")
 
-        # Pass the plotly figure to the display variable.
         display = [fig]
         return CheckResult(result, display=display)
 
     @staticmethod
     def fgsm_attack(x, epsilon):
-        # TODO: Implement the FGSM attack.
-        x_tilde = ...
+        """Implementiert den FGSM Angriff: x_tilde = x + epsilon * sign(grad(L))."""
+        # Erstellt das Rauschen basierend auf dem Vorzeichen des Gradienten
+        x_tilde = x + epsilon * x.grad.data.sign()
+        # Werte auf [0, 1] begrenzen, damit es ein gültiges Bild bleibt
+        x_tilde = torch.clamp(x_tilde, 0, 1)
         return x_tilde

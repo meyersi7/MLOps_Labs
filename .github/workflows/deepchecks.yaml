@@ -27,7 +27,7 @@ jobs:
 
       - name: Pipeline ausführen
         run: |
-          cd lab04/deepchecks_intro
+          cd lab04/deepchecks_advanced
           python data.py
           python train.py
           python test.py
@@ -36,4 +36,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deepchecks-html-report
-          path: lab04/deepchecks_intro/report.html
+          path: lab04/deepchecks_advanced/report.html
